@@ -11,6 +11,7 @@ import scrapy
 class TwitterCrawlerItem(scrapy.Item):
     
     tweetId = scrapy.Field()
+    publisherInfo = scrapy.Field()
     time = scrapy.Field()
     text = scrapy.Field()
     replies = scrapy.Field()
