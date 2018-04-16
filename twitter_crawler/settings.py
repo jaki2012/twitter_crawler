@@ -16,7 +16,7 @@ NEWSPIDER_MODULE = 'twitter_crawler.spiders'
 
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-# USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/603.3.8 (KHTML, like Gecko) Version/10.1.2 Safari/603.3.8'
+USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/603.3.8 (KHTML, like Gecko) Version/10.1.2 Safari/603.3.8'
 
 USER_AGENT_POOLS = [
     "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; AcooBrowser; .NET CLR 1.1.4322; .NET CLR 2.0.50727)",
@@ -64,7 +64,7 @@ USER_AGENT_POOLS = [
 # Configure a delay for requests for the same website (default: 0)
 # See https://doc.scrapy.org/en/latest/topics/settings.html#download-delay
 # See also autothrottle settings and docs
-# DOWNLOAD_DELAY = 3
+DOWNLOAD_DELAY = 1
 # The download delay setting will honor only one of:
 #CONCURRENT_REQUESTS_PER_DOMAIN = 16
 #CONCURRENT_REQUESTS_PER_IP = 16
@@ -89,11 +89,11 @@ USER_AGENT_POOLS = [
 
 # Enable or disable downloader middlewares
 # See https://doc.scrapy.org/en/latest/topics/downloader-middleware.html
-DOWNLOADER_MIDDLEWARES = {
-   # 'twitter_crawler.middlewares.TwitterCrawlerDownloaderMiddleware': 543,
-   # 'scrapy.downloadermiddleware.useragent.UserAgentMiddleware': None,
-   'twitter_crawler.middlewares.MyUserAgentMiddleware': 400
-}
+# DOWNLOADER_MIDDLEWARES = {
+#    # 'twitter_crawler.middlewares.TwitterCrawlerDownloaderMiddleware': 543,
+#    # 'scrapy.downloadermiddleware.useragent.UserAgentMiddleware': None,
+#    'twitter_crawler.middlewares.MyUserAgentMiddleware': 400
+# }
 
 # Enable or disable extensions
 # See https://doc.scrapy.org/en/latest/topics/extensions.html
@@ -127,3 +127,5 @@ ITEM_PIPELINES = {
 #HTTPCACHE_DIR = 'httpcache'
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+
+LOG_LEVEL = 'INFO'

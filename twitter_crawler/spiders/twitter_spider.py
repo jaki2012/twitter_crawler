@@ -153,4 +153,4 @@ class TwitterSpider(scrapy.Spider):
 
                 next_url = "https://twitter.com/i/search/timeline?f=tweets&q={}&src=typd&max_position=" + max_position+ "&reset_error_state=false"
                 next_url = next_url.format(response.meta['query'])
-                yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query'], "dont_redirect": True,})
+                yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query']})
