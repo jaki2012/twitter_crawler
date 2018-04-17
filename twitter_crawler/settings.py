@@ -129,3 +129,11 @@ ITEM_PIPELINES = {
 #HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
 
 LOG_LEVEL = 'INFO'
+
+# MONGODB CONNECTION AND EXPORT SETTINGS
+MONGO_HOST = "127.0.0.1"
+MONGO_PORT = 27016
+MONGO_DB = "twitter_crawler"
+MONGO_COLLECTION = "tweets"
+MONGO_USER = "jaki"
+MONGO_PASSWORD = "5201314ljc"

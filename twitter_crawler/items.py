@@ -18,3 +18,4 @@ class TwitterCrawlerItem(scrapy.Item):
     retweets = scrapy.Field()
     likes = scrapy.Field()
     entries = scrapy.Field()
+    query = scrapy.Field()

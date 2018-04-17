@@ -132,6 +132,8 @@ class TwitterSpider(scrapy.Spider):
 
             item['entries'] = entries
 
+            item['query'] = response.meta['query']
+
             if self.min_tweet is None:
                 self.min_tweet = item
 
@@ -150,7 +152,7 @@ class TwitterSpider(scrapy.Spider):
                     max_position = data['min_position']
                 else:
                     max_position = "TWEET-%s-%s" % (max_tweet['tweetId'], self.min_tweet['tweetId'])
-
+                print("Search hints 18: %d" % self.currentIteration)
                 next_url = "https://twitter.com/i/search/timeline?f=tweets&q={}&src=typd&max_position=" + max_position+ "&reset_error_state=false"
                 next_url = next_url.format(response.meta['query'])
                 yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query']})
