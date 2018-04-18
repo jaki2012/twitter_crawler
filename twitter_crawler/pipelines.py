@@ -11,7 +11,6 @@ import pymongo
 class TwitterCrawlerPipeline(object):
     
     def __init__(self):
-        self.ids_collected = set()
         self.items_nums = 0
 
         self.client = pymongo.MongoClient(host=settings['MONGO_HOST'], port=settings['MONGO_PORT'])
@@ -21,14 +20,13 @@ class TwitterCrawlerPipeline(object):
 
     def process_item(self, item, spider):
         self.items_nums += 1
-        if item['tweetId'] in self.ids_collected:
-            raise DropItem("Duplicate item found: %s" % item)
-        else:
-            self.ids_collected.add(item['tweetId'])
-            self.coll.insert(dict(item))
-            print("Uniques tweets/Total tweets: %d/%d" % (len(self.ids_collected), self.items_nums))
-            return item
+        self.coll.insert(dict(item))
+        if self.items_nums % 100 ==0:
+        	print("%d items have been collected." % self.items_nums)
+        # print("Uniques tweets/Total tweets: %d/%d" % (self.items_nums - spider.duplicated_num, self.items_nums))
+        return item
 
     # spider_closed() function is deprecated.
     def close_spider(self, spider):
+        print("Successfully finish all jobs.")
         self.client.close()

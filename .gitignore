@@ -1,1 +1,3 @@
 /twitter_crawler/crawls/*
+/twitter_crawler/screen*
+tweets.json
