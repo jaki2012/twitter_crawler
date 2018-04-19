@@ -130,10 +130,15 @@ ITEM_PIPELINES = {
 
 LOG_LEVEL = 'INFO'
 
-# MONGODB CONNECTION AND EXPORT SETTINGS
-MONGO_HOST = "127.0.0.1"
+# Mongodb connection and export settings
+MONGO_HOST = '127.0.0.1'
 MONGO_PORT = 27016
-MONGO_DB = "twitter_crawler"
-MONGO_COLLECTION = "tweets"
-MONGO_USER = "jaki"
-MONGO_PASSWORD = "5201314ljc"
+MONGO_DB = 'twitter_crawler'
+MONGO_COLLECTION = 'tweets'
+MONGO_USER = 'jaki'
+MONGO_PASSWORD = '5201314ljc'
+
+# Bloomfilter and Redis server config
+BLOOMFILTER_ENABLED = True
+REDIS_HOST = 'localhost'
+REDIS_PORT = 6379

@@ -5,7 +5,7 @@
 ```
 scrapy crawl twitter -a file=queries.txt -a language=en -a since=2018-03-01
 ```
-##### or more robustlt:
+##### or more robustly:
 ```
-scrapy crawl twitter -a file=queries.txt -a language=en -a since=2018-03-01 -s JOBDIR=crawls/twitter-0001
+scrapy crawl twitter -a file=queries.txt -a language=en -a since=2018-03-01 -s JOBDIR=crawls/twitter-001
 ```

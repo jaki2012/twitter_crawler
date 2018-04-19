@@ -1,5 +1,6 @@
 import scrapy
 from scrapy import http
+from scrapy.conf import settings
 import traceback
 from scrapy.selector import Selector
 from datetime import datetime
@@ -8,6 +9,8 @@ import json
 import os
 
 from twitter_crawler.items import TwitterCrawlerItem
+
+CUSTOMIZED_DEBUG = False
 
 class TwitterSpider(scrapy.Spider):
     
@@ -44,8 +47,7 @@ class TwitterSpider(scrapy.Spider):
                 self.queries.append(self.temp_query)
 
         self.currentIteration = 1
-        # max_iterations
-        # always execute 2 more requests
+        # max_iterations, always execute 2 more requests
         self.totalIterations = 500000
         self.min_tweet = None
         # crawled_starturls_index
@@ -83,9 +85,6 @@ class TwitterSpider(scrapy.Spider):
         return constructed_url
 
     def parse(self, response):
-        # print(dir(response))
-        # print(response.url)
-        # original当时也有开发接口调用次数限制
         data = json.loads(response.body.decode("utf-8"))
         response_selec = Selector(text=data['items_html'])
         # sels = response.xpath('.//div[@class="stream"]/ol[contains(@class, "stream-items")]/li[contains(@class, "stream-item")]')
@@ -98,19 +97,21 @@ class TwitterSpider(scrapy.Spider):
                 # core parts of tweet
                 tweetId = sel.xpath('.//a[contains(@class, "js-permalink")]/@data-conversation-id').extract()
 
-                # to avoid crashing because of twitter's returnning zero values
+                # to avoid crashing the program because of twitter's returnning zero values
                 if not tweetId:
                     continue
                 else:
-                    item['tweetId'] = tweetId[0]
-                # BloomFilter
-                # if self.bloomfilter.isContains(tweetId.encode("utf-8")):
-                #     print("Dublicate tweet with id %s found." % tweetId)
-                #     self.duplicated_num +=1
-                #     continue
-                # else:
-                #     self.bloomfilter.insert(tweetId.encode("utf-8"))
-                #     item['tweetId'] = tweetId
+                    if settings['BLOOMFILTER_ENABLED']:
+                        # BloomFilter
+                        if self.bloomfilter.isContains(tweetId[0].encode("utf-8")):
+                            print("Dublicate tweet with id %s found." % tweetId[0])
+                            self.duplicated_num +=1
+                            continue
+                        else:
+                            self.bloomfilter.insert(tweetId[0].encode("utf-8"))
+                            item['tweetId'] = tweetId[0]
+                    else:
+                        item['tweetId'] = tweetId[0]
 
                 item['text'] = ''.join(sel.xpath('.//div[@class="js-tweet-text-container"]/p//text()').extract())
 
@@ -135,19 +136,22 @@ class TwitterSpider(scrapy.Spider):
                 item['publisherInfo'] = publisherInfo
 
                 # interactions
-                retweets = sel.css('span.ProfileTweet-action--retweet > span.ProfileTweet-actionCount').xpath('@data-tweet-stat-count').extract()
+                retweets = sel.css('span.ProfileTweet-action--retweet > span.ProfileTweet-actionCount').xpath(
+                    '@data-tweet-stat-count').extract()
                 if retweets:
                     item['retweets'] = int(retweets[0])
                 else:
                     item['retweets'] = 0
 
-                likes = sel.css('span.ProfileTweet-action--favorite > span.ProfileTweet-actionCount').xpath('@data-tweet-stat-count').extract()
+                likes = sel.css('span.ProfileTweet-action--favorite > span.ProfileTweet-actionCount').xpath(
+                    '@data-tweet-stat-count').extract()
                 if likes:
                     item['likes'] = int(likes[0])
                 else:
                     item['likes'] = 0
 
-                replies = sel.css('span.ProfileTweet-action--reply > span.ProfileTweet-actionCount').xpath('@data-tweet-stat-count').extract()
+                replies = sel.css('span.ProfileTweet-action--reply > span.ProfileTweet-actionCount').xpath(
+                    '@data-tweet-stat-count').extract()
                 if replies:
                     item['replies'] = int(replies[0])
                 else:
@@ -187,6 +191,7 @@ class TwitterSpider(scrapy.Spider):
 
                 item['entries'] = entries
 
+                # record which query is used to catch this tweet
                 item['query'] = response.meta['query']
 
                 if self.min_tweet is None:
@@ -210,5 +215,6 @@ class TwitterSpider(scrapy.Spider):
                 self.currentIteration += 1
                 if hasattr(self, 'state'):
                     self.state['iteration_num'] = self.state.get('iteration_num', 0) + 1
-                # print("requesting \n%s" % next_url)
+                if CUSTOMIZED_DEBUG: 
+                    print("requesting \n%s" % next_url)
                 yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query']})

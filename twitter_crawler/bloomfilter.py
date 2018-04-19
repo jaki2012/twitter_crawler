@@ -1,4 +1,5 @@
 import redis
+from scrapy.conf import settings
 from hashlib import md5
 
 
@@ -15,7 +16,7 @@ class SimpleHash(object):
 
 
 class BloomFilter(object):
-    def __init__(self, host='localhost', port=6379, db=0, blockNum=1, key='bloomfilter'):
+    def __init__(self, host=settings['REDIS_HOST'], port=settings['REDIS_PORT'], db=0, blockNum=1, key='bloomfilter'):
         """
         :param host: the host of Redis
         :param port: the port of Redis
