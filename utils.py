@@ -1,5 +1,6 @@
 import codecs
 import tqdm
+import redis
 import pymongo
 from twitter_crawler import settings
 from multiprocessing.dummy import Pool as ThreadPool
@@ -19,45 +20,49 @@ def generate_queries(keywords_file_name='keywords.txt', output_file_name='querie
 
     output.write(','.join(queries))
 
+def get_queries_nums(query_file='queries.txt'):
+    file = codecs.open(query_file, 'r', 'utf-8')
+
+    queries = file.readlines()[0]
+    print(len(queries.split(',')))
+            
+
 def remove_duplicate():
     client = pymongo.MongoClient(host=settings.MONGO_HOST, port=settings.MONGO_PORT)
     client.admin.authenticate(settings.MONGO_USER, settings.MONGO_PASSWORD)
     db = client[settings.MONGO_DB]
     collection = db[settings.MONGO_COLLECTION]
-    unique_collection = db.unique_tweets
 
     date_query_item_len = len(' since:2018-03-01')
 
-    max_len = 0
-    max_id = ""
+    a = db.tweets.aggregate([{
+       '$group':
+         {
+           '_id':  '$tweetId' ,
+           'queries': { '$addToSet': { "$substr": [ "$query", 0, { '$subtract': [ { '$strLenCP': "$query" }, 17 ] }]} },
+           'text': { '$first':'$text'},
+           'time': { '$first':'$time'},
+           'userName': { '$first':'$publisherInfo.username'},
+           'userScreenName':{ '$first':'$publisherInfo.screenName'},
+           'userId' :{ '$first':'$publisherInfo.userId'},
+           'time': { '$first':'$time'},
+           'numberRetweets' : {'$first':'$retweets'},
+           'numberLikes' : {'$first':'$likes'},
+           'numberReplies' : {'$first':'$replies'},
+           'hashtags': {'$first':'$entries.hashtags'},
+           'photos': {'$first':'$entries.photos'},
+           'urls': {'$first':'$entries.urls'},
+           'videos': {'$first':'$entries.videos'}
+         }
+     },{
+        '$out':'unique_tweets'
+     }])
 
-    distinct_tweetIds = collection.distinct('tweetId')
-    
-    def insert_unique_tweets(tweetId):
-        nonlocal max_len
-        queries = set()
-        first_tweet = None
-        for tweet in collection.find({'tweetId':tweetId}):
-            queries.add(tweet['query'][:-date_query_item_len])
-            if first_tweet is None:
-                first_tweet = tweet
-        unique_collection.insert(first_tweet)
-        unique_collection.update({'tweetId':first_tweet['tweetId']}, {'$set':{'queries': list(queries)}})
-        unique_collection.update({'tweetId':first_tweet['tweetId']}, {'$unset':{'query': ''}})
-        if len(queries)>max_len:
-            max_len= len(queries)
-            max_id = tweet['tweetId']
-
-    pool = ThreadPool()
-    for _ in tqdm.tqdm(pool.imap_unordered(insert_unique_tweets, distinct_tweetIds), total=len(distinct_tweetIds)):
-        pass
-
-    pool.close()
-    pool.join()
-    print(max_id)
+    print("finished!")
 
 
 
 if __name__ == '__main__':
     # generate_queries()
     remove_duplicate()
+    # get_queries_nums()

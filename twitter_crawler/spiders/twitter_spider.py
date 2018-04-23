@@ -1,4 +1,6 @@
 import scrapy
+import redis
+import time
 from scrapy import http
 from scrapy.conf import settings
 import traceback
@@ -10,7 +12,7 @@ import os
 
 from twitter_crawler.items import TwitterCrawlerItem
 
-CUSTOMIZED_DEBUG = False
+CUSTOMIZED_DEBUG = True
 
 class TwitterSpider(scrapy.Spider):
     
@@ -24,9 +26,10 @@ class TwitterSpider(scrapy.Spider):
         self.url_base = 'https://twitter.com/i/search/timeline?f=tweets&src=typd&q={}'
         self.start_urls = []
         self.queries = []
+        self.job_dir = ''
         self.temp_query = None
         self.duplicated_num = 0
-
+        self.redis_server = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
         if kwargs.get('file') is not None:
             filename = os.path.join(os.getcwd(), kwargs.get('file'))
@@ -49,7 +52,6 @@ class TwitterSpider(scrapy.Spider):
         self.currentIteration = 1
         # max_iterations, always execute 2 more requests
         self.totalIterations = 500000
-        self.min_tweet = None
         # crawled_starturls_index
         self.crawled_stuidx = -1
 
@@ -84,24 +86,43 @@ class TwitterSpider(scrapy.Spider):
         self.temp_query = query
         return constructed_url
 
+    def get_min_tweetId(self, item):
+        if settings['JOBDIR'] is not None:
+            query_key = '-'.join([settings['JOBDIR'] , item['query']])
+        else:
+            query_key = item['query']
+        tweetId = self.redis_server.get(query_key)
+        if tweetId is None:
+            self.redis_server.set(query_key, item['tweetId'])
+            if CUSTOMIZED_DEBUG:
+                print("Get mintweetid return from insert.")
+            return item['tweetId']
+        else:
+            print("Get mintweetid from query.")
+            return tweetId
+
+
+
     def parse(self, response):
         data = json.loads(response.body.decode("utf-8"))
         response_selec = Selector(text=data['items_html'])
         # sels = response.xpath('.//div[@class="stream"]/ol[contains(@class, "stream-items")]/li[contains(@class, "stream-item")]')
         sels = response_selec.xpath('//li[@data-item-type="tweet"]/div')
         len_sels = len(sels)
+        min_tweet_id = None
         for i, sel in enumerate(sels):
             try:
                 item = TwitterCrawlerItem()
                 
                 # core parts of tweet
-                tweetId = sel.xpath('.//a[contains(@class, "js-permalink")]/@data-conversation-id').extract()
+                tweetId = sel.xpath('.//@data-tweet-id').extract()
 
                 # to avoid crashing the program because of twitter's returnning zero values
                 if not tweetId:
                     continue
                 else:
                     if settings['BLOOMFILTER_ENABLED']:
+                        print('Bloomfilter enabled.')
                         # BloomFilter
                         if self.bloomfilter.isContains(tweetId[0].encode("utf-8")):
                             print("Dublicate tweet with id %s found." % tweetId[0])
@@ -164,6 +185,7 @@ class TwitterSpider(scrapy.Spider):
                     try:
                         urls.append(url_node.xpath('@data-expanded-url').extract()[0])
                     except IndexError as err:
+                        print('index error.')
                         pass
 
 
@@ -194,21 +216,22 @@ class TwitterSpider(scrapy.Spider):
                 # record which query is used to catch this tweet
                 item['query'] = response.meta['query']
 
-                if self.min_tweet is None:
-                    self.min_tweet = item
+                if min_tweet_id is None:
+                    min_tweet_id = self.get_min_tweetId(item)
 
                 yield(item)
             except Exception as err:
+                print('trace_back before')
                 traceback.print_exc()
                 print("Error happens when parse tweet:\n%s" % sel.xpath('.').extract()[0])
 
         if(self.currentIteration <= self.totalIterations and len_sels > 0):
             max_tweet = item
-            if self.min_tweet['tweetId'] is not max_tweet['tweetId']:
+            if min_tweet_id is not max_tweet['tweetId']:
                 if "min_position" in data.keys():
                     max_position = data['min_position']
                 else:
-                    max_position = "TWEET-%s-%s" % (max_tweet['tweetId'], self.min_tweet['tweetId'])
+                    max_position = "TWEET-%s-%s" % (max_tweet['tweetId'], min_tweet_id)
                 print("Current iterations: %d" % self.currentIteration)
                 next_url = "https://twitter.com/i/search/timeline?f=tweets&q={}&src=typd&max_position=" + max_position+ "&reset_error_state=false"
                 next_url = next_url.format(response.meta['query'])
