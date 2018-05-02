@@ -39,20 +39,19 @@ def remove_duplicate():
        '$group':
          {
            '_id':  '$tweetId' ,
-           'queries': { '$addToSet': { "$substr": [ "$query", 0, { '$subtract': [ { '$strLenCP': "$query" }, 17 ] }]} },
+           # 'queries': { '$addToSet': { "$substr": [ "$query", 0, { '$subtract': [ { '$strLenCP': "$query" }, 17 ] }]} },
            'text': { '$first':'$text'},
            'time': { '$first':'$time'},
            'userName': { '$first':'$publisherInfo.username'},
            'userScreenName':{ '$first':'$publisherInfo.screenName'},
            'userId' :{ '$first':'$publisherInfo.userId'},
-           'time': { '$first':'$time'},
            'numberRetweets' : {'$first':'$retweets'},
            'numberLikes' : {'$first':'$likes'},
            'numberReplies' : {'$first':'$replies'},
-           'hashtags': {'$first':'$entries.hashtags'},
-           'photos': {'$first':'$entries.photos'},
-           'urls': {'$first':'$entries.urls'},
-           'videos': {'$first':'$entries.videos'}
+           # 'hashtags': {'$first':'$entries.hashtags'},
+           # 'photos': {'$first':'$entries.photos'},
+           # 'urls': {'$first':'$entries.urls'},
+           # 'videos': {'$first':'$entries.videos'}
          }
      },{
         '$out':'unique_tweets'
