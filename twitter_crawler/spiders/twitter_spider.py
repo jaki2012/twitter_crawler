@@ -200,11 +200,16 @@ class TwitterSpider(scrapy.Spider):
                 video_node_styles = sel.xpath('.//div[contains(@class, "PlayableMedia-player")]/@style').extract()
                 
                 if len(video_node_styles) > 0 :
+                    video_node_styles = video_node_styles[0].split('; ')
                     for style in video_node_styles:
                         if style.startswith('background'):
+                            if CUSTOMIZED_DEBUG:
+                                print(style)
                             tmp = style.split('/')[-1]
                             video_id = tmp[:tmp.index('.jpg')]
                             videos.append({'id': video_id})
+                if CUSTOMIZED_DEBUG:
+                    print(videos)
 
                 entries = {
                     'hashtags': hashtags, 'photos': photos,
