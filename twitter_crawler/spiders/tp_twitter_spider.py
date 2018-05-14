@@ -15,103 +15,27 @@ CUSTOMIZED_DEBUG = False
 
 class TwitterSpider(scrapy.Spider):
     
-    name = "twitter"
+    name = "tptwitter"
     bloomfilter = BloomFilter()
 
     def __init__(self, query=None, *args ,**kwargs):
 
         super(TwitterSpider, self).__init__(*args, **kwargs)
 
-        self.url_base = 'https://twitter.com/i/search/timeline?f=tweets&src=typd&q={}'
-        self.start_urls = []
+
+        self.start_urls = ['https://twitter.com/i/profiles/show/POTUS/timeline/tweets?include_available_features=1&include_entities=1&max_position=991337476177453058&reset_error_state=false']
         self.queries = []
         self.job_dir = ''
         self.temp_query = None
         self.duplicated_num = 0
-        self.redis_server = redis.Redis(host='localhost', port=6379, decode_responses=True)
-
-        if kwargs.get('file') is not None:
-            self.get_conversations = True
-
-        if kwargs.get('file') is not None:
-            filename = os.path.join(os.getcwd(), kwargs.get('file'))
-            with open(filename, 'r') as file:
-                keywords = file.readline().strip().split(',')
-                if len(keywords) == 0:
-                    print("No query word specified, please check your command.")
-                else:
-                    self.start_urls = []
-                    for keyword in keywords:
-                        self.start_urls.append(self.construct_url(keyword, **kwargs))
-                        self.queries.append(self.temp_query)
-        else:
-            if query is None:
-                print("No query word specified, please check your command.")
-            else:
-                self.start_urls = [self.construct_url(query, **kwargs)]
-                self.queries.append(self.temp_query)
-
-        self.currentIteration = 1
-        # max_iterations, always execute 2 more requests
-        self.totalIterations = 500000
-        # crawled_starturls_index
-        self.crawled_stuidx = -1
-
-        # To verify if each start_url corresponds to its original query
-        for i, start_url in enumerate(self.start_urls):
-            print("%s with %s" % (self.queries[i], start_url))
-
-    def start_requests(self):
-        if hasattr(self, 'state'):
-            self.currentIteration = self.state.get('iteration_num', 1)
-            if self.currentIteration > self.totalIterations:
-                print("The job has been finished, hence we do nothing here.")
-                return
-            self.crawled_stuidx = self.state.get('crawled_stuidx', -1)
-        print("Start from iterations %d" % self.currentIteration)
-        for i, url in enumerate(self.start_urls):
-            if i <= self.crawled_stuidx:
-                continue
-            print("start requesting \n%s" % url)
-            # set dont_filter to be True means we allowing duplicating on this url
-            yield http.Request(url, dont_filter=True, meta={"query": self.queries[i]})
-            if hasattr(self, 'state'):
-                self.state['crawled_stuidx'] = self.state.get('crawled_stuidx', -1) + 1
-
-    def construct_url(self, query, **kwargs):
-        constructed_url = self.url_base
-        if kwargs.get("since") is not None:
-            query += (" since:" + kwargs.get("since"))
-        if kwargs.get("until") is not None:
-            query += (" until:" + kwargs.get("until"))
-        constructed_url  = self.url_base.format(query)
-        if kwargs.get('language') is not None:
-                constructed_url  += ("&l=" + kwargs.get("language"))
-        self.temp_query = query
-        return constructed_url
-
-    def get_min_tweetId(self, item):
-        if settings['JOBDIR'] is not None:
-            query_key = '-'.join([settings['JOBDIR'] , item['query']])
-        else:
-            query_key = item['query']
-        tweetId = self.redis_server.get(query_key)
-        if tweetId is None:
-            self.redis_server.set(query_key, item['tweetId'])
-            if CUSTOMIZED_DEBUG:
-                print("Get mintweetid return from insert.")
-            return item['tweetId']
-        else:
-            print("Get mintweetid from query.")
-            return tweetId
-
-
+        self.expire = False
+        self.expire_time = datetime.strptime('2018-03-01 00:00:00', '%Y-%m-%d %H:%M:%S')
 
     def parse(self, response):
         data = json.loads(response.body.decode("utf-8"))
         response_selec = Selector(text=data['items_html'])
         # sels = response.xpath('.//div[@class="stream"]/ol[contains(@class, "stream-items")]/li[contains(@class, "stream-item")]')
-        sels = response_selec.xpath('//li[@data-item-type="tweet"]/div')
+        sels = response_selec.xpath('//li[@data-item-type="tweet"]')
         len_sels = len(sels)
         min_tweet_id = None
         for i, sel in enumerate(sels):
@@ -140,18 +64,32 @@ class TwitterSpider(scrapy.Spider):
 
                 item['text'] = ''.join(sel.xpath('.//div[@class="js-tweet-text-container"]/p//text()').extract())
 
+                print(item['text'])
+                item['conversationId'] = sel.xpath('.//@data-conversation-id').extract()[0]
+                temp = sel.xpath('.//div[@class="context"]//span[contains(@class, "Icon--retweeted")]').extract()
+                if len(temp) > 0:
+                    item['retweeted'] = True
+                else:
+                    item['retweeted'] = False
+
                 if item['text'] == '':
                     # If there is not text, we ignore the tweet
                     continue
 
                 unix_time = int(sel.xpath('.//span[contains(@class, "_timestamp")]/@data-time').extract()[0])
                 item['time'] = datetime.fromtimestamp(unix_time).strftime('%Y-%m-%d %H:%M:%S')
+                print(item['time'])
+                print(self.expire_time)
+                item['time'] = datetime.strptime(item['time'], '%Y-%m-%d %H:%M:%S')
+                if item['time'] < self.expire_time:
+                    self.expire = True
+                    break
 
                 # information of the publisher
                 publisherInfo = {}
                 username = sel.xpath('.//@data-name').extract()[0]
                 screenName = "@" + sel.xpath('.//@data-screen-name').extract()[0]
-                userId = sel.xpath('./@data-user-id').extract()[0]
+                userId = sel.xpath('.//@data-user-id').extract()[0]
                 verified = sel.xpath('.//span[@class="FullNameGroup"]//span[contains(@class, "Icon--verified")]')
                 if len(verified) > 0:
                     verified = True
@@ -232,11 +170,6 @@ class TwitterSpider(scrapy.Spider):
 
                 item['entries'] = entries
 
-                # record which query is used to catch this tweet
-                item['query'] = response.meta['query']
-
-                if min_tweet_id is None:
-                    min_tweet_id = self.get_min_tweetId(item)
 
                 yield(item)
             except Exception as err:
@@ -244,19 +177,12 @@ class TwitterSpider(scrapy.Spider):
                 traceback.print_exc()
                 # print("Error happens when parse tweet:\n%s" % sel.xpath('.').extract()[0])
 
-        if(self.currentIteration <= self.totalIterations and len_sels > 0):
+        if(len_sels > 0 and not self.expire):
             max_tweet = item
             if min_tweet_id is not max_tweet['tweetId']:
                 if "min_position" in data.keys():
                     max_position = data['min_position']
-                else:
-                    max_position = "TWEET-%s-%s" % (max_tweet['tweetId'], min_tweet_id)
-                print("Current iterations: %d" % self.currentIteration)
-                next_url = "https://twitter.com/i/search/timeline?f=tweets&q={}&src=typd&max_position=" + max_position+ "&reset_error_state=false"
-                next_url = next_url.format(response.meta['query'])
-                self.currentIteration += 1
-                if hasattr(self, 'state'):
-                    self.state['iteration_num'] = self.state.get('iteration_num', 0) + 1
+                next_url = 'https://twitter.com/i/profiles/show/realDonaldTrump/timeline/tweets?include_available_features=1&include_entities=1&max_position=' + max_position +'&reset_error_state=false'
                 if CUSTOMIZED_DEBUG: 
                     print("requesting \n%s" % next_url)
-                yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query']})
+                yield http.Request(next_url, callback=self.parse)

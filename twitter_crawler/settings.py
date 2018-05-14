@@ -16,8 +16,8 @@ NEWSPIDER_MODULE = 'twitter_crawler.spiders'
 
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-# USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/603.3.8 (KHTML, like Gecko) Version/10.1.2 Safari/603.3.8'
-USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11'
+USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/603.3.8 (KHTML, like Gecko) Version/10.1.2 Safari/603.3.8'
+# USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11'
 
 USER_AGENT_POOLS = [
     "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; AcooBrowser; .NET CLR 1.1.4322; .NET CLR 2.0.50727)",
@@ -136,6 +136,8 @@ MONGO_HOST = '127.0.0.1'
 MONGO_PORT = 27016
 MONGO_DB = 'twitter_crawler'
 MONGO_COLLECTION = 'tweets'
+MONGO_COLLECTION2 = 'trump'
+MONGO_COLLECTION3 = 'conversation'
 MONGO_USER = 'jaki'
 MONGO_PASSWORD = '5201314ljc'
 
