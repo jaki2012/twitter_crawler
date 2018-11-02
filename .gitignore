@@ -9,3 +9,4 @@ build/
 twistd.pid
 crawls/*
 **/__pycache__/*
+screelog.*
