@@ -1,3 +1,11 @@
 /twitter_crawler/crawls/*
 /twitter_crawler/screen*
 tweets.json
+dbs/
+eggs/
+logs/
+project.egg-info/
+build/
+twistd.pid
+crawls/*
+**/__pycache__/*

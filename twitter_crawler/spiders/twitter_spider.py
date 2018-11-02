@@ -9,6 +9,9 @@ from datetime import datetime
 from twitter_crawler.bloomfilter import BloomFilter
 import json
 import os
+import re
+
+from urllib.parse import quote
 
 from twitter_crawler.items import TwitterCrawlerItem
 CUSTOMIZED_DEBUG = False
@@ -21,14 +24,17 @@ class TwitterSpider(scrapy.Spider):
     def __init__(self, query=None, *args ,**kwargs):
 
         super(TwitterSpider, self).__init__(*args, **kwargs)
-
-        self.url_base = 'https://twitter.com/i/search/timeline?f=tweets&src=typd&q={}'
+        self.url_base = 'https://twitter.com/search?src=typd&q={}'
+        self.next_url_base = 'https://twitter.com/i/search/timeline?vertical=default&q={}&l=en&src=typd&{}_position={}&reset_error_state=false'
         self.start_urls = []
         self.queries = []
+        # A dict to record whether the initital request of a specific query has already been processed, or not
+        self.inited_dict = {}
         self.job_dir = ''
         self.temp_query = None
+        self.inited = False
         self.duplicated_num = 0
-        self.redis_server = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        self.redis_server = redis.Redis(host='localhost', password='pandora', port=6379, decode_responses=True)
 
         if kwargs.get('file') is not None:
             self.get_conversations = True
@@ -49,6 +55,7 @@ class TwitterSpider(scrapy.Spider):
                 print("No query word specified, please check your command.")
             else:
                 self.start_urls = [self.construct_url(query, **kwargs)]
+                print(self.start_urls)
                 self.queries.append(self.temp_query)
 
         self.currentIteration = 1
@@ -69,12 +76,21 @@ class TwitterSpider(scrapy.Spider):
                 return
             self.crawled_stuidx = self.state.get('crawled_stuidx', -1)
         print("Start from iterations %d" % self.currentIteration)
+        
         for i, url in enumerate(self.start_urls):
             if i <= self.crawled_stuidx:
                 continue
             print("start requesting \n%s" % url)
+            
+            # necessary headers to get json response from twitter
+            headers = {
+                "Accept" : "application/json, text/javascript, */*; q=0.01",
+                "x-push-state-request" : "true",
+                "accept-encoding": "gzip, deflate, br",
+                "accept-language": "en"
+            }
             # set dont_filter to be True means we allowing duplicating on this url
-            yield http.Request(url, dont_filter=True, meta={"query": self.queries[i]})
+            yield http.Request(url, method='GET', headers=headers, dont_filter=True, meta={"query": self.queries[i]})
             if hasattr(self, 'state'):
                 self.state['crawled_stuidx'] = self.state.get('crawled_stuidx', -1) + 1
 
@@ -84,7 +100,7 @@ class TwitterSpider(scrapy.Spider):
             query += (" since:" + kwargs.get("since"))
         if kwargs.get("until") is not None:
             query += (" until:" + kwargs.get("until"))
-        constructed_url  = self.url_base.format(query)
+        constructed_url  = self.url_base.format(quote(query, 'utf-8'))
         if kwargs.get('language') is not None:
                 constructed_url  += ("&l=" + kwargs.get("language"))
         self.temp_query = query
@@ -102,22 +118,39 @@ class TwitterSpider(scrapy.Spider):
                 print("Get mintweetid return from insert.")
             return item['tweetId']
         else:
-            print("Get mintweetid from query.")
+            if CUSTOMIZED_DEBUG:
+                print("Get mintweetid from query.")
             return tweetId
 
 
 
     def parse(self, response):
+
         data = json.loads(response.body.decode("utf-8"))
-        response_selec = Selector(text=data['items_html'])
+        # which query_word is we are requesting
+        query_word = response.meta['query']
+        if(query_word not in self.inited_dict.keys()): 
+            # To process init request first
+            # Current iterations 0
+            init_data = data['page']
+            matchObj = re.search(r'data-max-position=\"(.*?)\"', init_data)
+            next_url = self.next_url_base.format(quote(response.meta['query'], 'utf-8'), 'max', quote(matchObj.group(1), 'utf-8'))
+
+            response_selec = Selector(text=data['page'])
+            
+        else:
+            response_selec = Selector(text=data['items_html'])
+        
         # sels = response.xpath('.//div[@class="stream"]/ol[contains(@class, "stream-items")]/li[contains(@class, "stream-item")]')
         sels = response_selec.xpath('//li[@data-item-type="tweet"]/div')
+
         len_sels = len(sels)
+        if CUSTOMIZED_DEBUG: 
+            print("return %d tweets for query:%s " % (len_sels, response.meta['query']))
         min_tweet_id = None
         for i, sel in enumerate(sels):
             try:
-                item = TwitterCrawlerItem()
-                
+                item = TwitterCrawlerItem()              
                 # core parts of tweet
                 tweetId = sel.xpath('.//@data-tweet-id').extract()
 
@@ -190,14 +223,22 @@ class TwitterSpider(scrapy.Spider):
 
                 # multimedia properties
                 urls = []
-                url_nodes = sel.css('a.twitter-timeline-link:not(.u-hidden)')
+                # url_nodes = sel.css('a.twitter-timeline-link:not(.u-hidden)')
+                # css selectors for elements :<a class='twitter-timeline-link' data-expane-url='0'> </a>
+                url_nodes = sel.css('a.twitter-timeline-link[data-expanded-url]')
+                # some urls like before selected by previous css selector cause exception
+                # <a href="https://t.co/AfqkVnBVpE" class="twitter-timeline-link" data-pre-embedded="true" dir="ltr">pic.twitter.com/AfqkVnBVpE</a>
                 for url_node in url_nodes:
+                    # Modified by jiechu li, in 2018.11.02, to solve twitter front-end modification: https://t.co/KOtfDWMP3R
                     try:
-                        urls.append(url_node.xpath('@data-expanded-url').extract()[0])
+                        urls.append(url_node.xpath('.//@data-expanded-url').extract()[0])
                     except IndexError as err:
                         print('index error.')
+                        if CUSTOMIZED_DEBUG:
+                            # see the modification on this selector
+                            print(url_node.extract())
+                            print("================")
                         pass
-
 
                 hashtags = [''.join(hashtag_node.xpath('.//text()').extract()) for hashtag_node in sel.xpath('.//a[contains(@class, "twitter-hashtag")]')]
                 
@@ -216,11 +257,15 @@ class TwitterSpider(scrapy.Spider):
                             if CUSTOMIZED_DEBUG:
                                 print(style)
                             tmp = style.split('/')[-1]
-
                             if '.jpg' in tmp:
                                 video_id = tmp[:tmp.index('.jpg')]
-                            else:
+                            elif '.png' in tmp:
                                 video_id = tmp[:tmp.index('.png')]
+                            else :
+                                # style = background-image:url('https://pbs.twimg.com/card_img/1056912735789817856/kYIEOewj?format=jpg&name=280x280')
+                                # recorded in 2018.11.01
+                                tmp = style.split('/')[-2]
+                                video_id = tmp
                             videos.append({'id': video_id})
                 if CUSTOMIZED_DEBUG:
                     print(videos)
@@ -244,19 +289,27 @@ class TwitterSpider(scrapy.Spider):
                 traceback.print_exc()
                 # print("Error happens when parse tweet:\n%s" % sel.xpath('.').extract()[0])
 
-        if(self.currentIteration <= self.totalIterations and len_sels > 0):
+
+        if(query_word not in self.inited_dict.keys()):
+            self.inited_dict[query_word] = 1
+            if CUSTOMIZED_DEBUG: 
+                print("requesting init url \n%s" % next_url)
+            yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query']})
+        elif(self.currentIteration <= self.totalIterations and len_sels > 0):                
             max_tweet = item
             if min_tweet_id is not max_tweet['tweetId']:
                 if "min_position" in data.keys():
                     max_position = data['min_position']
                 else:
-                    max_position = "TWEET-%s-%s" % (max_tweet['tweetId'], min_tweet_id)
-                print("Current iterations: %d" % self.currentIteration)
-                next_url = "https://twitter.com/i/search/timeline?f=tweets&q={}&src=typd&max_position=" + max_position+ "&reset_error_state=false"
-                next_url = next_url.format(response.meta['query'])
-                self.currentIteration += 1
-                if hasattr(self, 'state'):
-                    self.state['iteration_num'] = self.state.get('iteration_num', 0) + 1
-                if CUSTOMIZED_DEBUG: 
-                    print("requesting \n%s" % next_url)
-                yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query']})
+                    return
+            else:
+                return
+            
+            print("Current iterations: %d" % self.currentIteration)
+            next_url = self.next_url_base.format(quote(response.meta['query'], 'utf-8'), 'max', quote(max_position, 'utf-8'))
+            self.currentIteration += 1
+            if hasattr(self, 'state'):
+                self.state['iteration_num'] = self.state.get('iteration_num', 0) + 1
+            if CUSTOMIZED_DEBUG: 
+                print("requesting \n%s" % next_url)
+            yield http.Request(next_url, callback=self.parse, meta={"query": response.meta['query']})

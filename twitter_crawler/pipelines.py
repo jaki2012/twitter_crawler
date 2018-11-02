@@ -16,7 +16,7 @@ class TwitterCrawlerPipeline(object):
         self.client = pymongo.MongoClient(host=settings['MONGO_HOST'], port=settings['MONGO_PORT'])
         self.client.admin.authenticate(settings['MONGO_USER'], settings['MONGO_PASSWORD'])
         self.db = self.client[settings['MONGO_DB']]
-        self.coll = self.db[settings['MONGO_COLLECTION3']]
+        self.coll = self.db[settings['MONGO_COLLECTION']]
 
     def process_item(self, item, spider):
         self.items_nums += 1

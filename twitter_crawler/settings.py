@@ -136,9 +136,7 @@ MONGO_HOST = '127.0.0.1'
 MONGO_PORT = 27016
 MONGO_DB = 'twitter_crawler'
 MONGO_COLLECTION = 'tweets'
-MONGO_COLLECTION2 = 'trump'
-MONGO_COLLECTION3 = 'conversation'
-MONGO_USER = 'jaki'
+MONGO_USER = 'jaki2013'
 MONGO_PASSWORD = '5201314ljc'
 
 # Bloomfilter and Redis server config
